@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piano and Synthetic Vocals with Tone.js</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+  <h1>Multi-Track Music Composer</h1>
+  <p>Select and play compositions</p>
+  
+  <div class="track-selector">
+    <h2>Select Track</h2>
+    <div class="track-options">
+      <label>
+        <input type="radio" name="track" value="track1" checked>
+        Track 1: Piano and Vocals
+      </label>
+      <label>
+        <input type="radio" name="track" value="track2">
+        Track 2: Drum Beat
+      </label>
+    </div>
+  </div>
+  
+  <div class="controls">
+    <button id="play-button">Play Selected Track</button>
+    <button id="stop-button">Stop</button>
+  </div>
+  
+  <div class="visualizer" id="visualizer"></div>
+  
+  <!-- Load modules -->
+  <script src="utils/timeConverter.js"></script>
+  <script src="visualizer.js"></script>
+  <script src="tracks/trackManager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
