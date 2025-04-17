@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beatbox - Voice to Synth Converter</title>
+  <title>Beatbox V0.2 - Voice to Synth Converter</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -291,6 +291,11 @@
         const dataArray = new Uint8Array(bufferLength);
         analyzer.getByteFrequencyData(dataArray);
         
+        // Calculate volume for level indicator
+        const sum = dataArray.reduce((acc, val) => acc + val, 0);
+        const avg = sum / dataArray.length;
+        const volumeLevel = Math.min(100, avg * 2); // Scale for visualization
+        
         // Draw visualization
         const canvas = canvasRef.current;
         if (canvas) {
@@ -302,6 +307,11 @@
           canvasCtx.fillStyle = 'rgb(0, 0, 0)';
           canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
           
+          // Draw volume meter
+          canvasCtx.fillStyle = volumeLevel > 30 ? 'rgb(0, 255, 0)' : 'rgb(100, 100, 100)';
+          canvasCtx.fillRect(WIDTH - 30, HEIGHT - (volumeLevel / 100 * HEIGHT), 20, volumeLevel / 100 * HEIGHT);
+          
+          // Draw spectrum
           const barWidth = (WIDTH / bufferLength) * 2.5;
           let barHeight;
           let x = 0;
@@ -314,6 +324,11 @@
             
             x += barWidth + 1;
           }
+          
+          // Draw level text
+          canvasCtx.fillStyle = 'white';
+          canvasCtx.font = '12px Arial';
+          canvasCtx.fillText(`Mic Level: ${Math.round(volumeLevel)}%`, WIDTH - 100, 20);
         }
         
         // Basic sound detection logic
@@ -321,20 +336,27 @@
         const midEnergy = dataArray.slice(10, 100).reduce((sum, val) => sum + val, 0) / 90;
         const highEnergy = dataArray.slice(100, 300).reduce((sum, val) => sum + val, 0) / 200;
         
+        // Update feedback with levels if microphone seems too quiet
+        if (volumeLevel < 10 && isRecording) {
+          setFeedback('Microphone level is very low. Try speaking louder or check mic settings.');
+        } else if (isRecording && feedback.includes('low')) {
+          setFeedback('Recording... Make some beatbox sounds!');
+        }
+        
         const newSounds = [];
         
-        // Very simple threshold-based detection
-        if (bassEnergy > 200) {
+        // Much lower thresholds for easier detection
+        if (bassEnergy > 50) {
           kickSynth.current.triggerAttackRelease('C1', '8n');
           newSounds.push({ type: 'kick', time: Date.now() });
         }
         
-        if (midEnergy > 150 && bassEnergy < 180) {
+        if (midEnergy > 40 && bassEnergy < 60) {
           snareSynth.current.triggerAttackRelease('16n');
           newSounds.push({ type: 'snare', time: Date.now() });
         }
         
-        if (highEnergy > 100 && midEnergy < 120) {
+        if (highEnergy > 30 && midEnergy < 50) {
           hihatSynth.current.triggerAttackRelease('32n');
           newSounds.push({ type: 'hihat', time: Date.now() });
         }
