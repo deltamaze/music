@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beatbox - Voice to Synth Converter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: #1a202c;
+      color: white;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      font-weight: bold;
+      margin-bottom: 1.5rem;
+      color: #c4b5fd;
+    }
+    
+    p {
+      font-size: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    
+    .card {
+      width: 100%;
+      max-width: 48rem;
+      background-color: #2d3748;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      margin-bottom: 2rem;
+    }
+    
+    canvas {
+      width: 100%;
+      height: 10rem;
+      background-color: black;
+      border-radius: 0.375rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .button-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    button {
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      font-weight: bold;
+      font-size: 1.125rem;
+      transition: background-color 0.3s;
+      border: none;
+      cursor: pointer;
+      color: white;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .record-button {
+      background-color: #22c55e;
+    }
+    
+    .record-button:hover:not(:disabled) {
+      background-color: #16a34a;
+    }
+    
+    .stop-button {
+      background-color: #ef4444;
+    }
+    
+    .stop-button:hover:not(:disabled) {
+      background-color: #dc2626;
+    }
+    
+    .play-button {
+      background-color: #3b82f6;
+    }
+    
+    .play-button:hover:not(:disabled) {
+      background-color: #2563eb;
+    }
+    
+    .feedback {
+      text-align: center;
+      font-size: 1.125rem;
+      font-weight: 500;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+      color: #c4b5fd;
+    }
+    
+    .sound-tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    
+    .sound-tag {
+      border-radius: 0.375rem;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.875rem;
+    }
+    
+    .sound-tag.kick {
+      background-color: #b91c1c;
+    }
+    
+    .sound-tag.snare {
+      background-color: #b45309;
+    }
+    
+    .sound-tag.hihat {
+      background-color: #1d4ed8;
+    }
+    
+    .help-text {
+      margin-top: 2rem;
+      color: #9ca3af;
+      font-size: 0.875rem;
+    }
+    
+    ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    
+    const BeatboxApp = () => {
+      const [isRecording, setIsRecording] = useState(false);
+      const [audioContext, setAudioContext] = useState(null);
+      const [analyzer, setAnalyzer] = useState(null);
+      const [mediaRecorder, setMediaRecorder] = useState(null);
+      const [recordedChunks, setRecordedChunks] = useState([]);
+      const [feedback, setFeedback] = useState('Click "Start Recording" and make some beatbox sounds!');
+      const [synthSounds, setSynthSounds] = useState([]);
+      const [isPlaying, setIsPlaying] = useState(false);
+      
+      const canvasRef = useRef(null);
+      const streamRef = useRef(null);
+      const synth = useRef(null);
+      const kickSynth = useRef(null);
+      const snareSynth = useRef(null);
+      const hihatSynth = useRef(null);
+      
+      // Setup audio context and synths
+      useEffect(() => {
+        // Initialize Tone.js
+        Tone.start();
+        
+        // Create synths
+        kickSynth.current = new Tone.MembraneSynth({
+          pitchDecay: 0.05,
+          octaves: 5,
+          oscillator: {
+            type: 'sine'
+          },
+          envelope: {
+            attack: 0.001,
+            decay: 0.4,
+            sustain: 0.01,
+            release: 1.4,
+          }
+        }).toDestination();
+        
+        snareSynth.current = new Tone.NoiseSynth({
+          noise: {
+            type: 'white'
+          },
+          envelope: {
+            attack: 0.001,
+            decay: 0.2,
+            sustain: 0,
+            release: 0.2
+          }
+        }).toDestination();
+        
+        hihatSynth.current = new Tone.MetalSynth({
+          frequency: 200,
+          envelope: {
+            attack: 0.001,
+            decay: 0.1,
+            release: 0.01
+          },
+          harmonicity: 5.1,
+          modulationIndex: 32,
+          resonance: 4000,
+          octaves: 1.5
+        }).toDestination();
+        
+        return () => {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+          }
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+        };
+      }, []);
+      
+      const startRecording = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          streamRef.current = stream;
+          
+          // Set up audio context and analyzer
+          const context = new (window.AudioContext || window.webkitAudioContext)();
+          setAudioContext(context);
+          
+          const source = context.createMediaStreamSource(stream);
+          const analyzerNode = context.createAnalyser();
+          analyzerNode.fftSize = 2048;
+          source.connect(analyzerNode);
+          setAnalyzer(analyzerNode);
+          
+          // Set up media recorder
+          const recorder = new MediaRecorder(stream);
+          setMediaRecorder(recorder);
+          
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              setRecordedChunks(prev => [...prev, e.data]);
+            }
+          };
+          
+          recorder.start(100); // Collect data in 100ms chunks
+          setIsRecording(true);
+          setFeedback('Recording... Make some beatbox sounds!');
+          
+          // Start visualization and sound detection
+          requestAnimationFrame(analyzeAudio);
+          
+        } catch (err) {
+          console.error('Error accessing microphone:', err);
+          setFeedback('Error accessing microphone. Please check permissions.');
+        }
+      };
+      
+      const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        
+        setIsRecording(false);
+        setFeedback('Recording stopped. Click "Play Synth" to hear the result!');
+      };
+      
+      const analyzeAudio = () => {
+        if (!analyzer || !isRecording) return;
+        
+        const bufferLength = analyzer.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyzer.getByteFrequencyData(dataArray);
+        
+        // Draw visualization
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const canvasCtx = canvas.getContext('2d');
+          const WIDTH = canvas.width;
+          const HEIGHT = canvas.height;
+          
+          canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+          canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+          canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+          
+          const barWidth = (WIDTH / bufferLength) * 2.5;
+          let barHeight;
+          let x = 0;
+          
+          for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i] / 2;
+            
+            canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+            canvasCtx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
+            
+            x += barWidth + 1;
+          }
+        }
+        
+        // Basic sound detection logic
+        const bassEnergy = dataArray.slice(0, 10).reduce((sum, val) => sum + val, 0) / 10;
+        const midEnergy = dataArray.slice(10, 100).reduce((sum, val) => sum + val, 0) / 90;
+        const highEnergy = dataArray.slice(100, 300).reduce((sum, val) => sum + val, 0) / 200;
+        
+        const newSounds = [];
+        
+        // Very simple threshold-based detection
+        if (bassEnergy > 200) {
+          kickSynth.current.triggerAttackRelease('C1', '8n');
+          newSounds.push({ type: 'kick', time: Date.now() });
+        }
+        
+        if (midEnergy > 150 && bassEnergy < 180) {
+          snareSynth.current.triggerAttackRelease('16n');
+          newSounds.push({ type: 'snare', time: Date.now() });
+        }
+        
+        if (highEnergy > 100 && midEnergy < 120) {
+          hihatSynth.current.triggerAttackRelease('32n');
+          newSounds.push({ type: 'hihat', time: Date.now() });
+        }
+        
+        // Only add new sounds if there's not a similar sound within the last 200ms
+        if (newSounds.length > 0) {
+          setSynthSounds(prev => {
+            const now = Date.now();
+            const filtered = prev.filter(sound => now - sound.time < 2000); // Keep last 2 seconds of sounds
+            return [...filtered, ...newSounds];
+          });
+        }
+        
+        if (isRecording) {
+          requestAnimationFrame(analyzeAudio);
+        }
+      };
+      
+      const playRecording = async () => {
+        if (recordedChunks.length === 0) {
+          setFeedback('No recording available to play.');
+          return;
+        }
+        
+        // Create a new sequence from the detected sounds
+        setIsPlaying(true);
+        setFeedback('Playing synthesized beatbox...');
+        
+        // Get the unique timestamps
+        const uniqueTimes = [...new Set(synthSounds.map(sound => sound.time))].sort();
+        
+        // Simple playback
+        for (let i = 0; i < uniqueTimes.length; i++) {
+          const time = uniqueTimes[i];
+          const sounds = synthSounds.filter(s => s.time === time);
+          
+          for (const sound of sounds) {
+            switch (sound.type) {
+              case 'kick':
+                kickSynth.current.triggerAttackRelease('C1', '8n');
+                break;
+              case 'snare':
+                snareSynth.current.triggerAttackRelease('16n');
+                break;
+              case 'hihat':
+                hihatSynth.current.triggerAttackRelease('32n');
+                break;
+              default:
+                break;
+            }
+          }
+          
+          if (i < uniqueTimes.length - 1) {
+            const nextTime = uniqueTimes[i + 1];
+            const waitTime = Math.min(nextTime - time, 500); // Cap to 500ms max
+            await new Promise(resolve => setTimeout(resolve, waitTime / 4)); // Speed up for demo
+          }
+        }
+        
+        setIsPlaying(false);
+        setFeedback('Playback complete. Record again or play again!');
+      };
+      
+      return (
+        <div className="container">
+          <h1>Beatbox</h1>
+          <p>Voice to Synth Converter</p>
+          
+          <div className="card">
+            <canvas 
+              ref={canvasRef} 
+              width="600" 
+              height="200"
+            ></canvas>
+            
+            <div className="button-container">
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isPlaying}
+                className={isRecording ? "stop-button" : "record-button"}
+              >
+                {isRecording ? 'Stop Recording' : 'Start Recording'}
+              </button>
+              
+              <button
+                onClick={playRecording}
+                disabled={isRecording || isPlaying || synthSounds.length === 0}
+                className="play-button"
+              >
+                Play Synth
+              </button>
+            </div>
+            
+            <div className="feedback">{feedback}</div>
+          </div>
+          
+          <div className="card">
+            <h2>Detected Sounds</h2>
+            <div className="sound-tag-container">
+              {synthSounds.slice(-20).map((sound, index) => (
+                <div 
+                  key={index} 
+                  className={`sound-tag ${sound.type}`}
+                >
+                  {sound.type}
+                </div>
+              ))}
+              {synthSounds.length === 0 && (
+                <p style={{color: "#9ca3af"}}>No sounds detected yet. Try making some beatbox sounds!</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="help-text">
+            <p>Try these sounds:</p>
+            <ul>
+              <li>"Boots" or "B" sounds for kick drum</li>
+              <li>"Cats" or "K" sounds for snare</li>
+              <li>"Ts" or "Th" sounds for hi-hat</li>
+            </ul>
+          </div>
+        </div>
+      );
+    };
+    
+    ReactDOM.render(<BeatboxApp />, document.getElementById('root'));
+  </script>
+</body>
+</html>
